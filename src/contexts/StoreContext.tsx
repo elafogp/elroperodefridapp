@@ -246,33 +246,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Products (tabla: productos) ----
 // ---- Products (tabla: productos) ----
-  const addProduct = useCallback(async (p: Product) => {
-    // 1. Actualiza la pantalla de inmediato para que no se vea lento
+ const addProduct = useCallback(async (p: Product) => {
+    // 1. Actualiza la pantalla de inmediato
     setProducts(prev => [p, ...prev]);
 
-    // 2. Enviamos los datos a Supabase con los nombres EXACTOS de tu tabla
-   const addProduct = useCallback(async (p: Product) => {
-    setProducts(prev => [p, ...prev]);
-
-    // MAPEO CORRECTO: Nombres de la App -> Nombres de Supabase
+    // 2. Enviamos TODO, incluyendo el ID que genera la App
     const { error: prodError } = await supabase.from('productos').insert({
+      id: p.id,               // <--- IMPORTANTE: Lo pusimos de vuelta
       nombre: p.name, 
-      descripcion: p.category, // <--- AQUÍ: La columna en Supabase es 'descripcion'
+      descripcion: p.category, 
       precio: p.priceUSD, 
       stock: p.simpleStock || 0
     });
 
     if (prodError) {
       console.error("❌ Error de Supabase:", prodError);
-      alert("¡Atención! El producto se ve en pantalla pero NO se guardó: " + prodError.message);
+      alert("Error al guardar: " + prodError.message);
     } else {
-      console.log("✅ ¡Producto guardado en Supabase!");
+      console.log("✅ ¡ÉXITO! Producto guardado con ID:", p.id);
     }
-  }, []);
-    // Guardar variaciones si existen
+
+    // Si tienes variaciones, también se guardan
     if (p.variations.length > 0) {
       await supabase.from('product_variations').insert(
-        p.variations.map(v => ({ id: v.id, product_id: p.id, size: v.size, color: v.color, stock: v.stock }))
+        p.variations.map(v => ({ 
+          id: v.id, 
+          product_id: p.id, 
+          size: v.size, 
+          color: v.color, 
+          stock: v.stock 
+        }))
       );
     }
   }, []);
