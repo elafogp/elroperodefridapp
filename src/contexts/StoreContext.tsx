@@ -245,44 +245,57 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ---- Products (tabla: productos) ----
-  const addProduct = useCallback((p: Product) => {
+// ---- Products (tabla: productos) ----
+  const addProduct = useCallback(async (p: Product) => {
+    // 1. Actualiza la pantalla rápido para que el usuario no espere
     setProducts(prev => [p, ...prev]);
-    (async () => {
-      await supabase.from('productos').insert({
-        id: p.id, name: p.name, sku: p.sku, category: p.category, subcategory: p.subcategory,
-        cost_usd: p.costUSD, price_usd: p.priceUSD, has_variations: p.hasVariations,
-        simple_stock: p.simpleStock || 0, photos: p.photos,
-        low_stock_threshold: p.lowStockThreshold, publish_online: p.publishOnline,
-      });
-      if (p.variations.length > 0) {
-        await supabase.from('product_variations').insert(
-          p.variations.map(v => ({ id: v.id, product_id: p.id, size: v.size, color: v.color, stock: v.stock }))
-        );
-      }
-    })();
+
+    // 2. Intenta guardar en Supabase de verdad
+    const { error: prodError } = await supabase.from('productos').insert({
+      id: p.id, 
+      name: p.name, 
+      sku: p.sku, 
+      category: p.category, 
+      subcategory: p.subcategory,
+      cost_usd: p.costUSD, 
+      price_usd: p.priceUSD, 
+      has_variations: p.hasVariations,
+      simple_stock: p.simpleStock || 0, 
+      photos: p.photos,
+      low_stock_threshold: p.lowStockThreshold, 
+      publish_online: p.publishOnline,
+    });
+
+    if (prodError) {
+      console.error("❌ Error de Supabase:", prodError);
+      alert("¡Atención! El producto se ve en pantalla pero NO se guardó en la base de datos: " + prodError.message);
+    } else {
+      console.log("✅ ¡Producto guardado en Supabase con éxito!");
+    }
+
+    if (p.variations.length > 0) {
+      await supabase.from('product_variations').insert(
+        p.variations.map(v => ({ id: v.id, product_id: p.id, size: v.size, color: v.color, stock: v.stock }))
+      );
+    }
   }, []);
 
-  const updateProduct = useCallback((p: Product) => {
+  const updateProduct = useCallback(async (p: Product) => {
     setProducts(prev => prev.map(x => x.id === p.id ? p : x));
-    (async () => {
-      await supabase.from('productos').update({
-        name: p.name, sku: p.sku, category: p.category, subcategory: p.subcategory,
-        cost_usd: p.costUSD, price_usd: p.priceUSD, has_variations: p.hasVariations,
-        simple_stock: p.simpleStock || 0, photos: p.photos,
-        low_stock_threshold: p.lowStockThreshold, publish_online: p.publishOnline,
-      }).eq('id', p.id);
-      await supabase.from('product_variations').delete().eq('product_id', p.id);
-      if (p.variations.length > 0) {
-        await supabase.from('product_variations').insert(
-          p.variations.map(v => ({ id: v.id, product_id: p.id, size: v.size, color: v.color, stock: v.stock }))
-        );
-      }
-    })();
+    const { error } = await supabase.from('productos').update({
+      name: p.name, sku: p.sku, category: p.category, subcategory: p.subcategory,
+      cost_usd: p.costUSD, price_usd: p.priceUSD, has_variations: p.hasVariations,
+      simple_stock: p.simpleStock || 0, photos: p.photos,
+      low_stock_threshold: p.lowStockThreshold, publish_online: p.publishOnline,
+    }).eq('id', p.id);
+
+    if (error) alert("Error al actualizar: " + error.message);
   }, []);
 
-  const deleteProduct = useCallback((id: string) => {
+  const deleteProduct = useCallback(async (id: string) => {
     setProducts(prev => prev.filter(x => x.id !== id));
-    supabase.from('productos').delete().eq('id', id);
+    const { error } = await supabase.from('productos').delete().eq('id', id);
+    if (error) alert("Error al borrar: " + error.message);
   }, []);
 
   // ---- Customers (tabla: clientes) ----
