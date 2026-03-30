@@ -71,15 +71,15 @@ function loadLocalSetting<T>(key: string, fallback: T): T {
 function dbToProduct(row: any, variations: ProductVariation[]): Product {
   return {
     id: row.id,
-    name: row.name,
+    name: row.nombre || '',          // Lee 'nombre'
     sku: row.sku || '',
-    category: row.category || '',
+    category: row.descripcion || '', // Lee 'descripcion' (aquí estaba el error)
     subcategory: row.subcategory || '',
     costUSD: Number(row.cost_usd) || 0,
-    priceUSD: Number(row.price_usd) || 0,
+    priceUSD: Number(row.precio) || 0, // Lee 'precio'
     hasVariations: row.has_variations || false,
     variations,
-    simpleStock: row.simple_stock || 0,
+    simpleStock: Number(row.stock) || 0, // Lee 'stock'
     photos: row.photos || [],
     lowStockThreshold: row.low_stock_threshold || 3,
     publishOnline: row.publish_online || false,
@@ -247,32 +247,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // ---- Products (tabla: productos) ----
 // ---- Products (tabla: productos) ----
   const addProduct = useCallback(async (p: Product) => {
-    // 1. Actualiza la pantalla rápido para que el usuario no espere
+    // 1. Actualiza la pantalla de inmediato para que no se vea lento
     setProducts(prev => [p, ...prev]);
 
-    // 2. Intenta guardar en Supabase de verdad
+    // 2. Enviamos los datos a Supabase con los nombres EXACTOS de tu tabla
+   const addProduct = useCallback(async (p: Product) => {
+    setProducts(prev => [p, ...prev]);
+
+    // MAPEO CORRECTO: Nombres de la App -> Nombres de Supabase
     const { error: prodError } = await supabase.from('productos').insert({
-      id: p.id, 
-      name: p.name, 
-      sku: p.sku, 
-      category: p.category, 
-      subcategory: p.subcategory,
-      cost_usd: p.costUSD, 
-      price_usd: p.priceUSD, 
-      has_variations: p.hasVariations,
-      simple_stock: p.simpleStock || 0, 
-      photos: p.photos,
-      low_stock_threshold: p.lowStockThreshold, 
-      publish_online: p.publishOnline,
+      nombre: p.name, 
+      descripcion: p.category, // <--- AQUÍ: La columna en Supabase es 'descripcion'
+      precio: p.priceUSD, 
+      stock: p.simpleStock || 0
     });
 
     if (prodError) {
       console.error("❌ Error de Supabase:", prodError);
-      alert("¡Atención! El producto se ve en pantalla pero NO se guardó en la base de datos: " + prodError.message);
+      alert("¡Atención! El producto se ve en pantalla pero NO se guardó: " + prodError.message);
     } else {
-      console.log("✅ ¡Producto guardado en Supabase con éxito!");
+      console.log("✅ ¡Producto guardado en Supabase!");
     }
-
+  }, []);
+    // Guardar variaciones si existen
     if (p.variations.length > 0) {
       await supabase.from('product_variations').insert(
         p.variations.map(v => ({ id: v.id, product_id: p.id, size: v.size, color: v.color, stock: v.stock }))
@@ -282,11 +279,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateProduct = useCallback(async (p: Product) => {
     setProducts(prev => prev.map(x => x.id === p.id ? p : x));
+    
     const { error } = await supabase.from('productos').update({
-      name: p.name, sku: p.sku, category: p.category, subcategory: p.subcategory,
-      cost_usd: p.costUSD, price_usd: p.priceUSD, has_variations: p.hasVariations,
-      simple_stock: p.simpleStock || 0, photos: p.photos,
-      low_stock_threshold: p.lowStockThreshold, publish_online: p.publishOnline,
+      nombre: p.name, 
+      descripcion: p.category, 
+      precio: p.priceUSD, 
+      stock: p.simpleStock || 0
     }).eq('id', p.id);
 
     if (error) alert("Error al actualizar: " + error.message);
@@ -294,6 +292,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProduct = useCallback(async (id: string) => {
     setProducts(prev => prev.filter(x => x.id !== id));
+    
     const { error } = await supabase.from('productos').delete().eq('id', id);
     if (error) alert("Error al borrar: " + error.message);
   }, []);
