@@ -55,17 +55,19 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-// Helper to upsert a setting
-async function saveSetting(key: string, value: unknown) {
-  await supabase.from('settings').upsert({ key, value: value as any, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+// Settings stored in localStorage since no settings table exists
+function saveLocalSetting(key: string, value: unknown) {
+  try { localStorage.setItem(`store_${key}`, JSON.stringify(value)); } catch {}
+}
+function loadLocalSetting<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(`store_${key}`);
+    return v ? JSON.parse(v) : fallback;
+  } catch { return fallback; }
 }
 
-async function loadSetting<T>(key: string, fallback: T): Promise<T> {
-  const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
-  return data?.value !== undefined && data?.value !== null ? (data.value as T) : fallback;
-}
+// ===== DB → App mappers =====
 
-// Map DB row to app Product type
 function dbToProduct(row: any, variations: ProductVariation[]): Product {
   return {
     id: row.id,
@@ -128,7 +130,7 @@ function dbToTransaction(row: any): Transaction {
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [exchangeRate, _setExchangeRate] = useState(36.5);
+  const [exchangeRate, _setExchangeRate] = useState(() => loadLocalSetting('rate', 36.5));
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -139,17 +141,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [salaries, setSalaries] = useState<Salary[]>([]);
   const [cajaChica, setCajaChica] = useState<CajaChicaEntry[]>([]);
-  const [lowStockThreshold, _setLowStockThreshold] = useState(3);
-  const [customCategories, _setCustomCategories] = useState<Record<string, { label: string; subcategories: string[] }>>({});
-  const [customColors, _setCustomColors] = useState<string[]>([]);
-  const [customSizes, _setCustomSizes] = useState<string[]>([]);
+  const [lowStockThreshold, _setLowStockThreshold] = useState(() => loadLocalSetting('low_stock', 3));
+  const [customCategories, _setCustomCategories] = useState<Record<string, { label: string; subcategories: string[] }>>(() => loadLocalSetting('custom_categories', {}));
+  const [customColors, _setCustomColors] = useState<string[]>(() => loadLocalSetting('custom_colors', []));
+  const [customSizes, _setCustomSizes] = useState<string[]>(() => loadLocalSetting('custom_sizes', []));
 
   useEffect(() => {
     async function loadAll() {
       try {
         // Load products + variations
         const [{ data: prodRows }, { data: varRows }] = await Promise.all([
-          supabase.from('products').select('*').order('created_at', { ascending: false }),
+          supabase.from('productos').select('*').order('created_at', { ascending: false }),
           supabase.from('product_variations').select('*'),
         ]);
 
@@ -173,14 +175,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           { data: salRows },
           { data: cajaRows },
         ] = await Promise.all([
-          supabase.from('customers').select('*').order('created_at', { ascending: false }),
-          supabase.from('transactions').select('*').order('created_at', { ascending: false }),
-          supabase.from('expenses').select('*').order('created_at', { ascending: false }),
+          supabase.from('clientes').select('*').order('created_at', { ascending: false }),
+          supabase.from('transacciones').select('*').order('created_at', { ascending: false }),
+          supabase.from('gastos').select('*').order('created_at', { ascending: false }),
           supabase.from('apartados').select('*').order('created_at', { ascending: false }),
           supabase.from('pickups').select('*').order('created_at', { ascending: false }),
-          supabase.from('investments').select('*').order('created_at', { ascending: false }),
-          supabase.from('suppliers').select('*').order('created_at', { ascending: false }),
-          supabase.from('salaries').select('*').order('created_at', { ascending: false }),
+          supabase.from('inversiones').select('*').order('created_at', { ascending: false }),
+          supabase.from('proveedores').select('*').order('created_at', { ascending: false }),
+          supabase.from('salarios').select('*').order('created_at', { ascending: false }),
           supabase.from('caja_chica').select('*').order('created_at', { ascending: false }),
         ]);
 
@@ -228,23 +230,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           id: r.id, type: r.type as 'ingreso' | 'egreso', amount: Number(r.amount),
           description: r.description || '', date: r.date || '', createdAt: r.created_at,
         })));
-
-        // Load settings
-        const [rate, threshold, cats, colors, sizes] = await Promise.all([
-          loadSetting<number>('rate', 36.5),
-          loadSetting<number>('low_stock', 3),
-          loadSetting<Record<string, { label: string; subcategories: string[] }>>('custom_categories', {}),
-          loadSetting<string[]>('custom_colors', []),
-          loadSetting<string[]>('custom_sizes', []),
-        ]);
-
-        _setExchangeRate(rate);
-        _setLowStockThreshold(threshold);
-        _setCustomCategories(cats);
-        _setCustomColors(colors);
-        _setCustomSizes(sizes);
       } catch (err) {
-        console.error('Error loading data from Cloud:', err);
+        console.error('Error loading data from Supabase:', err);
       } finally {
         setLoading(false);
       }
@@ -254,14 +241,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const setExchangeRate = useCallback((rate: number) => {
     _setExchangeRate(rate);
-    saveSetting('rate', rate);
+    saveLocalSetting('rate', rate);
   }, []);
 
-  // ---- Products ----
+  // ---- Products (tabla: productos) ----
   const addProduct = useCallback((p: Product) => {
     setProducts(prev => [p, ...prev]);
     (async () => {
-      await supabase.from('products').insert({
+      await supabase.from('productos').insert({
         id: p.id, name: p.name, sku: p.sku, category: p.category, subcategory: p.subcategory,
         cost_usd: p.costUSD, price_usd: p.priceUSD, has_variations: p.hasVariations,
         simple_stock: p.simpleStock || 0, photos: p.photos,
@@ -278,13 +265,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const updateProduct = useCallback((p: Product) => {
     setProducts(prev => prev.map(x => x.id === p.id ? p : x));
     (async () => {
-      await supabase.from('products').update({
+      await supabase.from('productos').update({
         name: p.name, sku: p.sku, category: p.category, subcategory: p.subcategory,
         cost_usd: p.costUSD, price_usd: p.priceUSD, has_variations: p.hasVariations,
         simple_stock: p.simpleStock || 0, photos: p.photos,
         low_stock_threshold: p.lowStockThreshold, publish_online: p.publishOnline,
       }).eq('id', p.id);
-      // Replace variations
       await supabase.from('product_variations').delete().eq('product_id', p.id);
       if (p.variations.length > 0) {
         await supabase.from('product_variations').insert(
@@ -296,13 +282,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProduct = useCallback((id: string) => {
     setProducts(prev => prev.filter(x => x.id !== id));
-    supabase.from('products').delete().eq('id', id);
+    supabase.from('productos').delete().eq('id', id);
   }, []);
 
-  // ---- Customers ----
+  // ---- Customers (tabla: clientes) ----
   const addCustomer = useCallback((c: Customer) => {
     setCustomers(prev => [c, ...prev]);
-    supabase.from('customers').insert({
+    supabase.from('clientes').insert({
       id: c.id, name: c.name, cedula: c.cedula, phone: c.phone, instagram: c.instagram,
       birthday: c.birthday, notes: c.notes, discount_codes: c.discountCodes,
       lifetime_spend: c.lifetimeSpend,
@@ -311,7 +297,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateCustomer = useCallback((c: Customer) => {
     setCustomers(prev => prev.map(x => x.id === c.id ? c : x));
-    supabase.from('customers').update({
+    supabase.from('clientes').update({
       name: c.name, cedula: c.cedula, phone: c.phone, instagram: c.instagram,
       birthday: c.birthday, notes: c.notes, discount_codes: c.discountCodes,
       lifetime_spend: c.lifetimeSpend,
@@ -320,13 +306,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteCustomer = useCallback((id: string) => {
     setCustomers(prev => prev.filter(x => x.id !== id));
-    supabase.from('customers').delete().eq('id', id);
+    supabase.from('clientes').delete().eq('id', id);
   }, []);
 
-  // ---- Transactions ----
+  // ---- Transactions (tabla: transacciones) ----
   const addTransaction = useCallback((t: Transaction) => {
     setTransactions(prev => [t, ...prev]);
-    supabase.from('transactions').insert({
+    supabase.from('transacciones').insert({
       id: t.id, type: t.type, items: t.items as any, customer_id: t.customerId || null,
       payment_method: t.paymentMethod, split_payment: t.splitPayment as any || null,
       total_usd: t.totalUSD, total_local: t.totalLocal, exchange_rate: t.exchangeRate,
@@ -340,7 +326,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateTransaction = useCallback((t: Transaction) => {
     setTransactions(prev => prev.map(x => x.id === t.id ? t : x));
-    supabase.from('transactions').update({
+    supabase.from('transacciones').update({
       type: t.type, items: t.items as any, customer_id: t.customerId || null,
       payment_method: t.paymentMethod, split_payment: t.splitPayment as any || null,
       total_usd: t.totalUSD, total_local: t.totalLocal, exchange_rate: t.exchangeRate,
@@ -352,10 +338,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }).eq('id', t.id);
   }, []);
 
-  // ---- Expenses ----
+  // ---- Expenses (tabla: gastos) ----
   const addExpense = useCallback((e: Expense) => {
     setExpenses(prev => [e, ...prev]);
-    supabase.from('expenses').insert({
+    supabase.from('gastos').insert({
       id: e.id, amount: e.amount, currency: e.currency, category: e.category,
       description: e.description, date: e.date, exchange_rate: e.exchangeRate || null,
       receipt_photo: e.receiptPhoto || null,
@@ -364,7 +350,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateExpense = useCallback((e: Expense) => {
     setExpenses(prev => prev.map(x => x.id === e.id ? e : x));
-    supabase.from('expenses').update({
+    supabase.from('gastos').update({
       amount: e.amount, currency: e.currency, category: e.category,
       description: e.description, date: e.date, exchange_rate: e.exchangeRate || null,
       receipt_photo: e.receiptPhoto || null,
@@ -373,7 +359,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteExpense = useCallback((id: string) => {
     setExpenses(prev => prev.filter(x => x.id !== id));
-    supabase.from('expenses').delete().eq('id', id);
+    supabase.from('gastos').delete().eq('id', id);
   }, []);
 
   // ---- Apartados ----
@@ -416,10 +402,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }).eq('id', p.id);
   }, []);
 
-  // ---- Investments ----
+  // ---- Investments (tabla: inversiones) ----
   const addInvestment = useCallback((i: Investment) => {
     setInvestments(prev => [i, ...prev]);
-    supabase.from('investments').insert({
+    supabase.from('inversiones').insert({
       id: i.id, concept: i.concept, total_cost: i.totalCost, paid_amount: i.paidAmount,
       month: i.month, status: i.status, supplier: i.supplier || null,
       notes: i.notes, payment_history: i.paymentHistory as any,
@@ -428,7 +414,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateInvestment = useCallback((i: Investment) => {
     setInvestments(prev => prev.map(x => x.id === i.id ? i : x));
-    supabase.from('investments').update({
+    supabase.from('inversiones').update({
       concept: i.concept, total_cost: i.totalCost, paid_amount: i.paidAmount,
       month: i.month, status: i.status, supplier: i.supplier || null,
       notes: i.notes, payment_history: i.paymentHistory as any,
@@ -437,13 +423,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteInvestment = useCallback((id: string) => {
     setInvestments(prev => prev.filter(x => x.id !== id));
-    supabase.from('investments').delete().eq('id', id);
+    supabase.from('inversiones').delete().eq('id', id);
   }, []);
 
-  // ---- Suppliers ----
+  // ---- Suppliers (tabla: proveedores) ----
   const addSupplier = useCallback((s: Supplier) => {
     setSuppliers(prev => [s, ...prev]);
-    supabase.from('suppliers').insert({
+    supabase.from('proveedores').insert({
       id: s.id, name: s.name, contact: s.contact, total_debt: s.totalDebt,
       payments: s.payments as any, notes: s.notes,
     });
@@ -451,7 +437,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateSupplier = useCallback((s: Supplier) => {
     setSuppliers(prev => prev.map(x => x.id === s.id ? s : x));
-    supabase.from('suppliers').update({
+    supabase.from('proveedores').update({
       name: s.name, contact: s.contact, total_debt: s.totalDebt,
       payments: s.payments as any, notes: s.notes,
     }).eq('id', s.id);
@@ -459,13 +445,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSupplier = useCallback((id: string) => {
     setSuppliers(prev => prev.filter(x => x.id !== id));
-    supabase.from('suppliers').delete().eq('id', id);
+    supabase.from('proveedores').delete().eq('id', id);
   }, []);
 
-  // ---- Salaries ----
+  // ---- Salaries (tabla: salarios) ----
   const addSalary = useCallback((s: Salary) => {
     setSalaries(prev => [s, ...prev]);
-    supabase.from('salaries').insert({
+    supabase.from('salarios').insert({
       id: s.id, user_id: s.userId, user_name: s.userName, role: s.role,
       base_salary_usd: s.baseSalaryUSD, paid_amount: s.paidAmount,
       payment_history: s.paymentHistory as any, month: s.month, status: s.status,
@@ -474,7 +460,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateSalary = useCallback((s: Salary) => {
     setSalaries(prev => prev.map(x => x.id === s.id ? s : x));
-    supabase.from('salaries').update({
+    supabase.from('salarios').update({
       user_id: s.userId, user_name: s.userName, role: s.role,
       base_salary_usd: s.baseSalaryUSD, paid_amount: s.paidAmount,
       payment_history: s.paymentHistory as any, month: s.month, status: s.status,
@@ -483,7 +469,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSalary = useCallback((id: string) => {
     setSalaries(prev => prev.filter(x => x.id !== id));
-    supabase.from('salaries').delete().eq('id', id);
+    supabase.from('salarios').delete().eq('id', id);
   }, []);
 
   // ---- Caja Chica ----
@@ -494,16 +480,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // ---- Settings ----
+  // ---- Settings (localStorage) ----
   const setLowStockThreshold = useCallback((n: number) => {
     _setLowStockThreshold(n);
-    saveSetting('low_stock', n);
+    saveLocalSetting('low_stock', n);
   }, []);
 
   const setCustomCategories = useCallback<React.Dispatch<React.SetStateAction<Record<string, { label: string; subcategories: string[] }>>>>((val) => {
     _setCustomCategories(prev => {
       const next = typeof val === 'function' ? val(prev) : val;
-      saveSetting('custom_categories', next);
+      saveLocalSetting('custom_categories', next);
       return next;
     });
   }, []);
@@ -511,7 +497,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const setCustomColors = useCallback<React.Dispatch<React.SetStateAction<string[]>>>((val) => {
     _setCustomColors(prev => {
       const next = typeof val === 'function' ? val(prev) : val;
-      saveSetting('custom_colors', next);
+      saveLocalSetting('custom_colors', next);
       return next;
     });
   }, []);
@@ -519,7 +505,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const setCustomSizes = useCallback<React.Dispatch<React.SetStateAction<string[]>>>((val) => {
     _setCustomSizes(prev => {
       const next = typeof val === 'function' ? val(prev) : val;
-      saveSetting('custom_sizes', next);
+      saveLocalSetting('custom_sizes', next);
       return next;
     });
   }, []);
