@@ -382,44 +382,42 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // 2. Discount stock for each item
     for (const item of t.items) {
-      if (item.variationId) {
-        // Discount from product_variations
+      if (item.variation) {
         const { data: vRow } = await supabase
           .from('product_variations')
           .select('stock')
-          .eq('id', item.variationId)
+          .eq('id', item.variation.id)
           .single();
         if (vRow) {
           await supabase.from('product_variations')
             .update({ stock: Math.max(0, vRow.stock - item.quantity) })
-            .eq('id', item.variationId);
+            .eq('id', item.variation.id);
         }
       } else {
-        // Discount from productos.stock
         const { data: pRow } = await supabase
           .from('productos')
           .select('stock')
-          .eq('id', item.productId)
+          .eq('id', item.product.id)
           .single();
         if (pRow) {
           await supabase.from('productos')
             .update({ stock: Math.max(0, pRow.stock - item.quantity) })
-            .eq('id', item.productId);
+            .eq('id', item.product.id);
         }
       }
 
       // Update local state stock
       setProducts(prev => prev.map(prod => {
-        if (prod.id !== item.productId) return prod;
-        if (item.variationId) {
+        if (prod.id !== item.product.id) return prod;
+        if (item.variation) {
           return {
             ...prod,
             variations: prod.variations.map(v =>
-              v.id === item.variationId ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
+              v.id === item.variation!.id ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
             ),
           };
         }
-        return { ...prod, simpleStock: Math.max(0, prod.simpleStock - item.quantity) };
+        return { ...prod, simpleStock: Math.max(0, (prod.simpleStock || 0) - item.quantity) };
       }));
     }
   }, []);
