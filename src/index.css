@@ -15,7 +15,7 @@
     --popover: 40 30% 99%;
     --popover-foreground: 30 10% 15%;
 
-    --primary: 300 29% 73%;
+    --primary: 30 40% 45%;
     --primary-foreground: 40 33% 97%;
 
     --secondary: 30 38% 59%;
@@ -24,7 +24,7 @@
     --muted: 40 20% 93%;
     --muted-foreground: 30 8% 46%;
 
-    --accent: 300 29% 73%;
+    --accent: 30 40% 45%;
     --accent-foreground: 30 10% 15%;
 
     --destructive: 0 72% 51%;
@@ -32,23 +32,23 @@
 
     --border: 30 20% 88%;
     --input: 30 20% 88%;
-    --ring: 300 29% 73%;
+    --ring: 30 40% 45%;
 
     --radius: 0.625rem;
 
     --sidebar-background: 40 30% 99%;
     --sidebar-foreground: 30 10% 25%;
-    --sidebar-primary: 300 29% 73%;
+    --sidebar-primary: 30 40% 45%;
     --sidebar-primary-foreground: 40 33% 97%;
     --sidebar-accent: 40 25% 95%;
     --sidebar-accent-foreground: 30 10% 25%;
     --sidebar-border: 30 20% 90%;
-    --sidebar-ring: 300 29% 73%;
+    --sidebar-ring: 30 40% 45%;
 
     /* Custom tokens */
-    --lilac: 300 29% 73%;
-    --lilac-light: 300 29% 90%;
-    --lilac-dark: 300 29% 55%;
+    --lilac: 30 40% 45%;
+    --lilac-light: 30 35% 75%;
+    --lilac-dark: 30 45% 32%;
     --camel: 30 38% 59%;
     --camel-light: 30 38% 80%;
     --camel-dark: 30 38% 45%;
@@ -96,11 +96,11 @@
     box-shadow: var(--shadow-elevated);
   }
   .felipe-glow {
-    text-shadow: 0 0 6px hsl(300 29% 73% / 0.3), 0 0 12px hsl(300 29% 73% / 0.15);
+    text-shadow: 0 0 6px hsl(30 40% 45% / 0.3), 0 0 12px hsl(30 40% 45% / 0.15);
     transition: all 0.3s ease;
   }
   .felipe-glow:hover {
-    text-shadow: 0 0 10px hsl(300 29% 73% / 0.6), 0 0 20px hsl(300 29% 73% / 0.3), 0 0 30px hsl(320 40% 70% / 0.2);
+    text-shadow: 0 0 10px hsl(30 40% 45% / 0.6), 0 0 20px hsl(30 40% 45% / 0.3), 0 0 30px hsl(25 45% 40% / 0.2);
     opacity: 1 !important;
   }
 }
