@@ -14,66 +14,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const ADMIN_PASSWORD = 'Elropero2025*';
-const WAREHOUSE_PASSWORD = 'f1234';
-
-function loadJSON<T>(key: string, fallback: T): T {
-  try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch { return fallback; }
-}
-function saveJSON(key: string, data: unknown) { localStorage.setItem(key, JSON.stringify(data)); }
-
-const DEFAULT_ADMIN: User = { id: '1', name: 'Administrador', role: 'admin', email: 'admin@elropero.com', password: ADMIN_PASSWORD };
+const DEFAULT_ADMIN: User = {
+  id: '1',
+  name: 'Felipe',
+  role: 'admin',
+  email: 'felipe@roperodefrida.com',
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => loadJSON('boutique_user', null));
-  const [managedUsers, setManagedUsers] = useState<User[]>(() => loadJSON('boutique_managed_users', []));
+  const [user] = useState<User | null>(DEFAULT_ADMIN);
+  const [managedUsers, setManagedUsers] = useState<User[]>([]);
 
-  const login = useCallback((role: UserRole, name: string, password?: string): boolean => {
-    if (role === 'admin') {
-      if (password !== ADMIN_PASSWORD) return false;
-      const u = { ...DEFAULT_ADMIN, name: name || DEFAULT_ADMIN.name };
-      setUser(u);
-      saveJSON('boutique_user', u);
-      return true;
-    }
-    if (role === 'warehouse') {
-      if (password !== WAREHOUSE_PASSWORD) return false;
-      const found = managedUsers.find(u => u.role === 'warehouse');
-      if (found) {
-        setUser(found);
-        saveJSON('boutique_user', found);
-        return true;
-      }
-      const u: User = { id: crypto.randomUUID(), name: name || 'Bodega', role: 'warehouse', email: '' };
-      setUser(u);
-      saveJSON('boutique_user', u);
-      return true;
-    }
-    // seller
-    const found = managedUsers.find(u => u.role === role && u.name === name);
-    if (found) {
-      if (found.password && found.password !== password) return false;
-      setUser(found);
-      saveJSON('boutique_user', found);
-      return true;
-    }
-    const u: User = { id: crypto.randomUUID(), name: name || 'Vendedor', role, email: '' };
-    setUser(u);
-    saveJSON('boutique_user', u);
-    return true;
-  }, [managedUsers]);
-
-  const logout = useCallback(() => { setUser(null); localStorage.removeItem('boutique_user'); }, []);
+  const login = useCallback((_role: UserRole, _name: string, _password?: string): boolean => true, []);
+  const logout = useCallback(() => {}, []);
   const isRole = useCallback((role: UserRole) => user?.role === role, [user]);
 
   const addManagedUser = useCallback((u: User) => {
-    setManagedUsers(prev => { const next = [...prev, u]; saveJSON('boutique_managed_users', next); return next; });
+    setManagedUsers(prev => [...prev, u]);
   }, []);
   const updateManagedUser = useCallback((u: User) => {
-    setManagedUsers(prev => { const next = prev.map(x => x.id === u.id ? u : x); saveJSON('boutique_managed_users', next); return next; });
+    setManagedUsers(prev => prev.map(x => x.id === u.id ? u : x));
   }, []);
   const deleteManagedUser = useCallback((id: string) => {
-    setManagedUsers(prev => { const next = prev.filter(x => x.id !== id); saveJSON('boutique_managed_users', next); return next; });
+    setManagedUsers(prev => prev.filter(x => x.id !== id));
   }, []);
 
   return (
