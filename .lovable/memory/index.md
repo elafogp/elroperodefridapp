@@ -1,10 +1,11 @@
 # Project Memory
 
 ## Core
-External Supabase: gsqotkpntctyompcxjfj.supabase.co. NO Lovable Cloud.
-Spanish table names: productos, transacciones, gastos, caja_chica, clientes, inversiones, proveedores, salarios, categorias, product_variations, apartados, pickups, tasas_cambio.
-Boutique POS app "El Ropero de Frida". Settings in localStorage (no settings table).
+Backend: Custom API on Hostinger (MySQL). NO Supabase, NO Lovable Cloud.
+API calls via src/lib/api.ts using fetch to /api/* routes.
+Spanish table names: productos, product_variations, clientes, transacciones, gastos, caja_chica, inversiones, proveedores, salarios, tasas_cambio, apartados, pickups.
+Boutique POS app "El Ropero de Frida". Auth mocked as admin always.
+Color palette: brown/café tones (hsl 30°). No lilac/purple.
 
 ## Memories
-- [Supabase config](mem://reference/supabase) — External Supabase connection details and table mapping
-- [DB schema](mem://reference/db-schema) — Exact column names per table discovered from live DB
+- [DB Schema](mem://reference/db-schema) — MySQL column mappings for all tables
